@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Outlier Detector</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                    <rect width="40" height="40" rx="8" fill="url(#gradient)"/>
+                    <path d="M20 10L28 16V24L20 30L12 24V16L20 10Z" stroke="white" stroke-width="2" stroke-linejoin="round"/>
+                    <defs>
+                        <linearGradient id="gradient" x1="0" y1="0" x2="40" y2="40">
+                            <stop offset="0%" stop-color="#667eea"/>
+                            <stop offset="100%" stop-color="#764ba2"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <h1>YouTube Outlier Detector</h1>
+            </div>
+            <p class="tagline">Find hidden gems and trending opportunities on YouTube</p>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Detection Form -->
+            <div class="card form-card" id="formCard">
+                <h2>Start Detection</h2>
+                <p class="card-description">Enter your search parameters to find YouTube outliers in your niche</p>
+                
+                <form id="detectionForm">
+                    <div class="form-group">
+                        <label for="query">Search Query *</label>
+                        <input 
+                            type="text" 
+                            id="query" 
+                            name="query" 
+                            placeholder="e.g., AI tools, home gym, productivity hacks"
+                            required
+                        >
+                        <span class="helper-text">The niche or topic you want to analyze</span>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="max_pages">Search Pages</label>
+                            <input 
+                                type="number" 
+                                id="max_pages" 
+                                name="max_pages" 
+                                value="3"
+                                min="1"
+                                max="10"
+                            >
+                            <span class="helper-text">~50 videos per page</span>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="published_days">Published Within (days)</label>
+                            <input 
+                                type="number" 
+                                id="published_days" 
+                                name="published_days" 
+                                value="14"
+                                min="1"
+                                max="365"
+                            >
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="min_views">Minimum Views</label>
+                            <input 
+                                type="number" 
+                                id="min_views" 
+                                name="min_views" 
+                                value="1000"
+                                min="0"
+                                step="100"
+                            >
+                        </div>
+
+                        <div class="form-group">
+                            <label for="region">Region</label>
+                            <select id="region" name="region">
+                                <option value="US">United States</option>
+                                <option value="GB">United Kingdom</option>
+                                <option value="CA">Canada</option>
+                                <option value="AU">Australia</option>
+                                <option value="IN">India</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="sheet_id">Google Sheet ID (optional)</label>
+                        <input 
+                            type="text" 
+                            id="sheet_id" 
+                            name="sheet_id" 
+                            placeholder="Leave empty to use default from .env"
+                        >
+                        <span class="helper-text">Results will be saved to this Google Sheet</span>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="submitBtn">
+                        <span class="btn-text">Start Detection</span>
+                        <svg class="btn-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <path d="M4 10H16M16 10L11 5M16 10L11 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Progress Card (Hidden by default) -->
+            <div class="card progress-card hidden" id="progressCard">
+                <h2>Detection in Progress</h2>
+                <p class="current-step" id="currentStep">Initializing...</p>
+                
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <p class="progress-percentage" id="progressPercentage">0%</p>
+
+                <div class="progress-steps">
+                    <div class="step" data-step="1">
+                        <div class="step-icon">1</div>
+                        <span>Search YouTube</span>
+                    </div>
+                    <div class="step" data-step="2">
+                        <div class="step-icon">2</div>
+                        <span>Fetch Details</span>
+                    </div>
+                    <div class="step" data-step="3">
+                        <div class="step-icon">3</div>
+                        <span>Analyze Channels</span>
+                    </div>
+                    <div class="step" data-step="4">
+                        <div class="step-icon">4</div>
+                        <span>Score Outliers</span>
+                    </div>
+                    <div class="step" data-step="5">
+                        <div class="step-icon">5</div>
+                        <span>Generate Ideas</span>
+                    </div>
+                    <div class="step" data-step="6">
+                        <div class="step-icon">6</div>
+                        <span>Update Sheet</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Card (Hidden by default) -->
+            <div class="card results-card hidden" id="resultsCard">
+                <div class="results-header">
+                    <h2>Detection Complete! 🎉</h2>
+                    <button class="btn btn-secondary" id="newDetectionBtn">New Detection</button>
+                </div>
+
+                <div class="results-summary">
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalVideos">0</div>
+                        <div class="stat-label">Videos Analyzed</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="outlierCount">0</div>
+                        <div class="stat-label">Outliers Found</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="ideaCount">0</div>
+                        <div class="stat-label">Ideas Generated</div>
+                    </div>
+                </div>
+
+                <a href="#" class="btn btn-primary btn-sheet" id="sheetLink" target="_blank">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M4 4H16V16H4V4Z" stroke="currentColor" stroke-width="2"/>
+                        <path d="M4 8H16M4 12H16M8 4V16" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                    <span>Open Google Sheet</span>
+                </a>
+
+                <div class="results-section">
+                    <h3>Top Outliers</h3>
+                    <div id="outliersList" class="outliers-list"></div>
+                </div>
+
+                <div class="results-section">
+                    <h3>Video Ideas</h3>
+                    <div id="ideasList" class="ideas-list"></div>
+                </div>
+            </div>
+
+            <!-- Error Card (Hidden by default) -->
+            <div class="card error-card hidden" id="errorCard">
+                <h2>⚠️ Error</h2>
+                <p id="errorMessage"></p>
+                <button class="btn btn-secondary" id="retryBtn">Try Again</button>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>YouTube Outlier Detector © 2026</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
