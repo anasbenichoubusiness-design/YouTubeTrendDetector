@@ -80,6 +80,33 @@ export function scoreVideos(
 
     if (!filters.includeShorts && video.is_short) continue;
 
+    // ── Strict English-only filter ──
+    const NON_LATIN = /[\u0900-\u0DFF\u0E00-\u0EFF\u1000-\u109F\u0600-\u077F\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF\u1100-\u11FF\u20B9]/;
+
+    // Reject title with non-Latin scripts or ₹ symbol
+    if (NON_LATIN.test(video.title)) continue;
+
+    // Reject if ANY tag contains non-Latin scripts (catches Indian content with English titles)
+    if (video.tags.some((tag) => NON_LATIN.test(tag))) continue;
+
+    // Reject titles with Indian financial terms (romanized Hindi)
+    if (/\b(lakh|crore|kaise|kise|kya|kare|karne|hindi|aadhar|aadhaar)\b/i.test(video.title)) continue;
+
+    // Title must be >90% Latin characters
+    const titleNoSpaces = video.title.replace(/\s/g, "");
+    const latinChars = video.title.replace(/[^a-zA-Z0-9]/g, "").length;
+    if (titleNoSpaces.length > 0 && latinChars < titleNoSpaces.length * 0.9) continue;
+
+    // Skip hashtag spam (3+ hashtags in title)
+    const hashtagCount = (video.title.match(/#/g) || []).length;
+    if (hashtagCount >= 3) continue;
+
+    // Skip if video language is set and not English
+    if (
+      video.default_language &&
+      !video.default_language.startsWith("en")
+    ) continue;
+
     const channel = channels[video.channel_id];
     if (!channel) continue;
 

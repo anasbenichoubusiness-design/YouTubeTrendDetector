@@ -1,4 +1,4 @@
-import type { ScoredVideo, VideoIdea } from "@/lib/types";
+import type { ScoredVideo, VideoIdea, AIVideoIdea } from "@/lib/types";
 
 function escapeCSV(value: string): string {
   if (value.includes(",") || value.includes('"') || value.includes("\n")) {
@@ -73,6 +73,36 @@ export function exportIdeasToCSV(ideas: VideoIdea[]): void {
   ]);
 
   downloadCSV(headers, rows, "video-ideas");
+}
+
+export function exportAIIdeasToCSV(ideas: AIVideoIdea[]): void {
+  const headers = [
+    "#",
+    "Title",
+    "Hook",
+    "Outline",
+    "Thumbnail Concept",
+    "Why This Will Work",
+    "Unique Angle",
+    "Based On",
+    "Optimal Length",
+    "Tags",
+  ];
+
+  const rows = ideas.map((idea) => [
+    String(idea.id),
+    escapeCSV(idea.title),
+    escapeCSV(idea.hook),
+    escapeCSV(idea.outline.join(" | ")),
+    escapeCSV(idea.thumbnailConcept),
+    escapeCSV(idea.whyThisWillWork),
+    escapeCSV(idea.uniqueAngle),
+    escapeCSV(idea.basedOn.map((b) => b.title).join("; ")),
+    idea.optimalLength,
+    escapeCSV(idea.suggestedTags.join(", ")),
+  ]);
+
+  downloadCSV(headers, rows, "ai-creative-briefs");
 }
 
 function downloadCSV(headers: string[], rows: string[][], filename: string): void {

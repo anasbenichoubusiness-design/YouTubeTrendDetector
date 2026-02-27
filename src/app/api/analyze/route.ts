@@ -10,6 +10,9 @@ export async function POST(request: NextRequest) {
   try {
     const body: AnalyzeRequest = await request.json();
 
+    // Use server env var as fallback for API key
+    const apiKey = body.apiKey?.trim() || process.env.YT_API_KEY || "";
+
     // Validate required fields
     if (!body.niche?.trim()) {
       return NextResponse.json(
@@ -17,7 +20,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    if (!body.apiKey?.trim()) {
+    if (!apiKey) {
       return NextResponse.json(
         { error: "YouTube API key is required" },
         { status: 400 }
@@ -27,22 +30,51 @@ export async function POST(request: NextRequest) {
     const maxPages = body.maxPages ?? 3;
     const publishedWithinDays = body.publishedWithinDays ?? 14;
     const minViews = body.minViews ?? 1000;
-    const region = body.region ?? "US";
-    const includeShorts = body.includeShorts ?? true;
+    const includeShorts = body.includeShorts ?? false;
+
+    // Multi-region support: use regions array, fall back to single region
+    const regions =
+      body.regions && body.regions.length > 0
+        ? body.regions
+        : [body.region ?? "US"];
+
+    // Scale pages per region to keep quota reasonable
+    const pagesPerRegion =
+      regions.length === 1
+        ? maxPages
+        : Math.max(1, Math.ceil(maxPages / regions.length));
 
     let totalQuota = 0;
 
-    // Step 1: Search YouTube
-    const searchResult = await searchYouTube({
-      apiKey: body.apiKey,
-      query: body.niche,
-      maxPages,
-      publishedAfterDays: publishedWithinDays,
-      regionCode: region,
-    });
-    totalQuota += searchResult.quotaUsed;
+    // Step 1: Search YouTube across all regions in parallel
+    const searchResults = await Promise.all(
+      regions.map((regionCode) =>
+        searchYouTube({
+          apiKey,
+          query: body.niche,
+          maxPages: pagesPerRegion,
+          publishedAfterDays: publishedWithinDays,
+          regionCode,
+          language: "en",
+        })
+      )
+    );
 
-    if (searchResult.videos.length === 0) {
+    // Merge and deduplicate across regions
+    const seen = new Set<string>();
+    const mergedVideos: { video_id: string; channel_id: string; title: string; description: string; published_at: string; thumbnail_url: string }[] = [];
+
+    for (const result of searchResults) {
+      totalQuota += result.quotaUsed;
+      for (const video of result.videos) {
+        if (!seen.has(video.video_id)) {
+          seen.add(video.video_id);
+          mergedVideos.push(video);
+        }
+      }
+    }
+
+    if (mergedVideos.length === 0) {
       return NextResponse.json(
         { error: "No videos found for this niche. Try different keywords or expand the date range." },
         { status: 404 }
@@ -50,9 +82,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Step 2: Fetch video details
-    const videoIds = searchResult.videos.map((v) => v.video_id);
+    const videoIds = mergedVideos.map((v) => v.video_id);
     const videoDetails = await fetchVideoDetails({
-      apiKey: body.apiKey,
+      apiKey,
       videoIds,
     });
     totalQuota += Math.ceil(videoIds.length / 50); // 1 quota per batch of 50
@@ -60,10 +92,16 @@ export async function POST(request: NextRequest) {
     // Step 3: Fetch channel stats
     const channelIds = [...new Set(videoDetails.map((v) => v.channel_id))];
     const channelStats = await fetchChannelStats({
-      apiKey: body.apiKey,
+      apiKey,
       channelIds,
     });
     totalQuota += Math.ceil(channelIds.length / 50);
+
+    // Build thumbnail map from search results
+    const thumbMap = new Map<string, string>();
+    for (const v of mergedVideos) {
+      if (v.thumbnail_url) thumbMap.set(v.video_id, v.thumbnail_url);
+    }
 
     // Step 4: Score outliers
     const scoredVideos = scoreVideos(videoDetails, channelStats, {
@@ -73,6 +111,13 @@ export async function POST(request: NextRequest) {
       includeShorts,
       topN: 50,
     });
+
+    // Patch thumbnail URLs from search results
+    for (const v of scoredVideos) {
+      if (!v.snippet.thumbnailUrl) {
+        v.snippet.thumbnailUrl = thumbMap.get(v.snippet.videoId) ?? "";
+      }
+    }
 
     // Step 5: Generate ideas
     const ideas = generateIdeas(scoredVideos, 9);

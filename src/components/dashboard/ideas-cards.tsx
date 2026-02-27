@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Card,
   CardContent,
@@ -98,6 +100,7 @@ export function IdeasCards({ ideas }: IdeasCardsProps) {
                 ))}
               </div>
             )}
+
           </CardContent>
 
           <CardFooter className="border-t border-zinc-800 pt-4 gap-3 flex-wrap">
