@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAnalysis } from "@/hooks/use-analysis";
 import { useApiKey } from "@/hooks/use-api-key";
 import { useAIIdeas } from "@/hooks/use-ai-ideas";
@@ -189,6 +189,52 @@ export default function Home() {
   }>({ status: "idle", video: null, brief: null });
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
+  // Thumbnail language filter state
+  const [thumbFilter, setThumbFilter] = useState<{
+    status: "idle" | "checking" | "done";
+    nonEnglishIds: Set<string>;
+  }>({ status: "idle", nonEnglishIds: new Set() });
+
+  // Auto-check thumbnails when analysis completes
+  const checkThumbnails = useCallback(
+    async (videos: ScoredVideo[]) => {
+      const effectiveAiKey = aiApiKey || "";
+      if (!effectiveAiKey && !serverConfigured.ai) return;
+
+      setThumbFilter({ status: "checking", nonEnglishIds: new Set() });
+      try {
+        const videoIds = videos.map((v) => v.snippet.videoId);
+        const res = await fetch("/api/check-thumbnails", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            videoIds,
+            aiProvider,
+            aiApiKey: effectiveAiKey,
+          }),
+        });
+        if (res.ok) {
+          const data = (await res.json()) as { nonEnglishVideoIds: string[] };
+          setThumbFilter({
+            status: "done",
+            nonEnglishIds: new Set(data.nonEnglishVideoIds || []),
+          });
+        } else {
+          setThumbFilter({ status: "done", nonEnglishIds: new Set() });
+        }
+      } catch {
+        setThumbFilter({ status: "done", nonEnglishIds: new Set() });
+      }
+    },
+    [aiApiKey, aiProvider, serverConfigured.ai]
+  );
+
+  useEffect(() => {
+    if (state.status === "success" && state.data.videos.length > 0) {
+      checkThumbnails(state.data.videos);
+    }
+  }, [state.status]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Computed
   const activeNiche = selectedNiche || customNiche.trim();
   const isLoading = state.status === "loading";
@@ -196,6 +242,15 @@ export default function Home() {
   const hasError = state.status === "error";
   const hasAIIdeas =
     aiIdeas.state.status === "success" && aiIdeas.state.ideas.length > 0;
+  const isFilteringThumbs = thumbFilter.status === "checking";
+
+  // Videos with non-English thumbnails removed
+  const filteredVideos =
+    hasData && thumbFilter.status === "done" && thumbFilter.nonEnglishIds.size > 0
+      ? state.data.videos.filter((v) => !thumbFilter.nonEnglishIds.has(v.snippet.videoId))
+      : hasData
+        ? state.data.videos
+        : [];
 
   // Handlers
   function handleSelectNiche(niche: string) {
@@ -229,6 +284,7 @@ export default function Home() {
     }
     if (!activeNiche) return;
     aiIdeas.reset();
+    setThumbFilter({ status: "idle", nonEnglishIds: new Set() });
     webTrends.fetch(activeNiche);
     setShowAll(false);
     analyze({
@@ -249,7 +305,7 @@ export default function Home() {
     }
     if (state.status !== "success") return;
     aiIdeas.generate({
-      videos: state.data.videos,
+      videos: filteredVideos,
       niche: state.data.query,
       aiProvider,
       aiApiKey,
@@ -348,8 +404,8 @@ export default function Home() {
   const visibleVideos =
     hasData
       ? showAll
-        ? state.data.videos
-        : state.data.videos.slice(0, 12)
+        ? filteredVideos
+        : filteredVideos.slice(0, 12)
       : [];
 
   return (
@@ -615,6 +671,16 @@ export default function Home() {
           </div>
         )}
 
+        {/* ─── Thumbnail Filtering ──────────────────────────────── */}
+        {isFilteringThumbs && hasData && (
+          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 mb-8 flex items-center gap-3">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-amber-700 border-t-amber-300" />
+            <p className="text-sm text-amber-300">
+              Scanning thumbnails for non-English text...
+            </p>
+          </div>
+        )}
+
         {/* ─── Error ──────────────────────────────────────────────── */}
         {hasError && (
           <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 mb-8">
@@ -679,13 +745,18 @@ export default function Home() {
                   Trending in &ldquo;{state.data.query}&rdquo;
                 </h2>
                 <p className="text-sm text-zinc-500 mt-1">
-                  {state.data.videos.length} outlier videos ·{" "}
-                  {selectedMarkets.join(", ")} ·{" "}
+                  {filteredVideos.length} outlier videos
+                  {thumbFilter.status === "done" && thumbFilter.nonEnglishIds.size > 0 && (
+                    <span className="text-zinc-600">
+                      {" "}({thumbFilter.nonEnglishIds.size} non-English filtered out)
+                    </span>
+                  )}
+                  {" "}· {selectedMarkets.join(", ")} ·{" "}
                   {state.data.quotaUsed} API units used
                 </p>
               </div>
               <ExportButton
-                videos={state.data.videos}
+                videos={filteredVideos}
                 ideas={state.data.ideas}
                 activeTab="outliers"
               />
@@ -699,13 +770,13 @@ export default function Home() {
             </div>
 
             {/* Show more */}
-            {!showAll && state.data.videos.length > 12 && (
+            {!showAll && filteredVideos.length > 12 && (
               <div className="text-center">
                 <button
                   onClick={() => setShowAll(true)}
                   className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors underline underline-offset-4"
                 >
-                  Show all {state.data.videos.length} videos
+                  Show all {filteredVideos.length} videos
                 </button>
               </div>
             )}
