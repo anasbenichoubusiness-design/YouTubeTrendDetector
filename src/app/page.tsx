@@ -55,10 +55,11 @@ const NICHES = [
 ];
 
 const MARKETS = [
-  { code: "US", label: "USA" },
-  { code: "GB", label: "UK" },
-  { code: "DE", label: "Germany" },
-  { code: "FR", label: "France" },
+  { key: "usa", label: "USA", codes: ["US"] },
+  { key: "europe", label: "Europe", codes: ["GB", "DE", "FR", "NL", "ES", "IT", "SE"] },
+  { key: "canada", label: "Canada", codes: ["CA"] },
+  { key: "oceania", label: "Oceania", codes: ["AU", "NZ"] },
+  { key: "asia", label: "Asia", codes: ["IN", "SG", "PH"] },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -167,7 +168,7 @@ export default function Home() {
   // Selection state
   const [selectedNiche, setSelectedNiche] = useState<string | null>(null);
   const [customNiche, setCustomNiche] = useState("");
-  const [selectedMarkets, setSelectedMarkets] = useState<string[]>(["US"]);
+  const [selectedMarkets, setSelectedMarkets] = useState<string[]>(["usa"]);
   const [showAll, setShowAll] = useState(false);
 
   // Channel Spy state
@@ -267,14 +268,24 @@ export default function Home() {
     if (value.trim()) setSelectedNiche(null);
   }
 
-  function toggleMarket(code: string) {
+  function toggleMarket(key: string) {
     setSelectedMarkets((prev) => {
-      if (prev.includes(code)) {
+      if (prev.includes(key)) {
         if (prev.length === 1) return prev; // keep at least one
-        return prev.filter((c) => c !== code);
+        return prev.filter((k) => k !== key);
       }
-      return [...prev, code];
+      return [...prev, key];
     });
+  }
+
+  // Expand selected market keys into YouTube region codes
+  function getRegionCodes(): string[] {
+    const codes: string[] = [];
+    for (const key of selectedMarkets) {
+      const market = MARKETS.find((m) => m.key === key);
+      if (market) codes.push(...market.codes);
+    }
+    return [...new Set(codes)]; // deduplicate
   }
 
   function handleAnalyze() {
@@ -290,7 +301,7 @@ export default function Home() {
     analyze({
       niche: activeNiche,
       apiKey,
-      regions: selectedMarkets,
+      regions: getRegionCodes(),
       maxPages: 3,
       publishedWithinDays: 14,
       minViews: 1000,
@@ -628,11 +639,11 @@ export default function Home() {
               <div className="flex flex-wrap gap-2">
                 {MARKETS.map((market) => (
                   <button
-                    key={market.code}
-                    onClick={() => toggleMarket(market.code)}
+                    key={market.key}
+                    onClick={() => toggleMarket(market.key)}
                     disabled={isLoading}
                     className={`px-3.5 py-1.5 rounded-full text-sm transition-all duration-150 ${
-                      selectedMarkets.includes(market.code)
+                      selectedMarkets.includes(market.key)
                         ? "bg-blue-600 text-white font-medium"
                         : "bg-zinc-900 text-zinc-400 border border-zinc-800 hover:border-zinc-600 hover:text-zinc-200"
                     } disabled:opacity-50 disabled:cursor-not-allowed`}
@@ -751,7 +762,7 @@ export default function Home() {
                       {" "}({thumbFilter.nonEnglishIds.size} non-English filtered out)
                     </span>
                   )}
-                  {" "}· {selectedMarkets.join(", ")} ·{" "}
+                  {" "}· {selectedMarkets.map((k) => MARKETS.find((m) => m.key === k)?.label || k).join(", ")} ·{" "}
                   {state.data.quotaUsed} API units used
                 </p>
               </div>
